@@ -8,7 +8,7 @@ class LlamaManager:
             model=self.model_id,
             torch_dtype="bfloat16",
             device_map="auto",
-            max_new_tokens=5000
+            max_new_tokens=2000
         )
     def generate_response(self, conversation_history, system_prompt, participants):
         # Prepare user input with the last 20 messages from conversation history
@@ -18,7 +18,7 @@ class LlamaManager:
         # Generate a response from LLaMA
         outputs = self.pipe(
             prompt,
-            max_new_tokens=1000,
+            max_new_tokens=2000,
         )
         generated_text = outputs[0]['generated_text']
         print(f"outputs: {outputs[0]['generated_text']}")

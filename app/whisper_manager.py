@@ -48,7 +48,7 @@ class WhisperManager:
             return transcription
         return "No speech detected."
 
-    def is_user_speaking(self, audio_array, threshold=0.005):
+    def is_user_speaking(self, audio_array, threshold=0.02):
         # Implement speech detection logic here
         # Calculate the Root Mean Square (RMS) to determine volume
         if audio_array.size == 0:

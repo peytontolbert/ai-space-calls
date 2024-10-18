@@ -1,7 +1,4 @@
 from pathlib import Path
-import os
-from dotenv import load_dotenv
-import openai
 from openai import OpenAI
 
 """
@@ -15,8 +12,9 @@ shimmer
 """
 
 class SpeechManager:
-    def __init__(self, api_key):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self, apikey):
+        print(apikey)
+        self.client = OpenAI(api_key=apikey)
 
     def text_to_speech(self, text, voice):
         speech_file_path = Path(__file__).parent / f"{voice}.mp3"
