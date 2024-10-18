@@ -25,22 +25,22 @@ def prepare_system_prompt(space_name, description, participants):
 def simulate_conversation(llama_manager, system_prompt, conversation_log, user_inputs, participants):
     for user_input in user_inputs:
         # Add user input to conversation log
-        conversation_log.append({'name': 'You', 'content': user_input})
+        conversation_log.add_message('You', user_input)
 
         # Prepare input for LLaMA using LlamaManager
         ai_responses = llama_manager.generate_response(
-            conversation_history=conversation_log,
+            conversation_history=conversation_log.get_log(),
             system_prompt=system_prompt,
             participants=participants
         )
 
         # Add AI responses to conversation log
         for response in ai_responses:
-            conversation_log.append({'name': response['name'], 'content': response['content']})
+            conversation_log.add_message(response['name'], response['content'])
 
         # Print the conversation so far
         print("\nCurrent Conversation:")
-        for message in conversation_log:
+        for message in conversation_log.get_log():
             print(f"{message['name']}: {message['content']}")
 
 # 2. Setup Whisper Manager for Speech-to-Text
