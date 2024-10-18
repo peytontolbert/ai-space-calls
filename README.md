@@ -22,8 +22,8 @@ AI Space Call is a web application that allows users to create personalized spac
 1. **Clone the repository:**
 
     ```bash
-    git clone https://github.com/peytontolbert/ai_space_calls.git
-    cd ai_space_call
+    git clone https://github.com/peytontolbert/ai-space-calls.git
+    cd ai-space-calls
     ```
 
 2. **Create a virtual environment:**
