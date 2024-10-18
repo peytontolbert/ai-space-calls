@@ -12,21 +12,19 @@ class LlamaManager:
         )
     def generate_response(self, conversation_history, system_prompt, participants):
         # Prepare user input with the last 20 messages from conversation history
-        user_prompt = ""
-        for message in conversation_history[-20:]:
-            user_prompt += f"{message['role']}: {message['content']}\n"
+        user_prompt = "\n".join([f"{msg['name']}: {msg['content']}" for msg in conversation_history[-20:]])
+        prompt = system_prompt + "\n" + user_prompt
         
         # Generate a response from LLaMA
         outputs = self.pipe(
-            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            prompt,
             max_new_tokens=256,
         )
         generated_text = outputs[0]['generated_text']
-
+        print(f"generated_text: {generated_text}")
         # Parse the generated text to extract the next speaker and their response
         # Assuming the model outputs in the format "Name: Message"
         ai_responses = self.parse_ai_response(generated_text, participants)
-
         return ai_responses
 
     def parse_ai_response(self, generated_text, participants):

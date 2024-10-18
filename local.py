@@ -19,6 +19,17 @@ def prepare_system_prompt(space_name, description, participants):
     for participant in participants:
         prompt += f"- {participant['name']}: {participant['persona']}\n"
     prompt += "\nConversation starts here.\n"
+    
+    # Add instructions and example for script-style responses
+    prompt += (
+        "Please respond with a script where each AI personality continues the conversation. "
+        "Ensure that each participant's response is prefixed with their name followed by a colon.\n\n"
+        "Example:\n"
+        "Alice: Hello, how are you?\n"
+        "Bob: I'm doing well, thank you. Let's discuss AI advancements.\n"
+        "Carol: Sounds great!\n"
+    )
+    
     return prompt
 
 # 4. Simulate Conversation
@@ -73,7 +84,8 @@ def main():
     
     # Record audio and transcribe user input
     user_input = whisper_manager.record_and_transcribe_audio()
-    conversation_log.append({'name': 'You', 'content': user_input})
+    print(f"user input: {user_input}")
+    #conversation_log.add_message('You', user_input)
     
     # Simulate the conversation
     simulate_conversation(llama_manager, system_prompt, conversation_log, [user_input], participants)
