@@ -43,6 +43,7 @@ def index():
 
 @main_bp.route("/update_conversation", methods=["POST"])
 def update_conversation():
+    print("update_conversation called")
     # Get the audio data from the request
     audio_data = request.files.get('audio_data')
     if audio_data:

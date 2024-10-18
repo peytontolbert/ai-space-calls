@@ -4,15 +4,11 @@
     <meta charset="UTF-8">
     <title>AI Space Call</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Include jQuery and Recorder.js -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/recorder-js@1.0.2/dist/recorder.js"></script>    
 </head>
 <body>
-    <div id="microphone-status">
-        Microphone is <span id="mic-state">On</span>
-        <span id="speaking-indicator" style="display: none;">(You are speaking...)</span>
-        <button id="mute-button">Mute</button>
-    </div>
     <h1>Create an AI Space Call</h1>
     <form id="setup-form" method="POST">
         <label for="space_name">Space Name:</label>
@@ -28,24 +24,29 @@
 
         <button type="submit">Start Space</button>
     </form>
+
     <div id="conversation-container" style="display: none;">
         <h2>Conversation</h2>
         <div id="microphone-status">
             Microphone is <span id="mic-state">On</span>
+            <span id="speaking-indicator" style="display: none;">(You are speaking...)</span>
             <button id="mute-button">Mute</button>
         </div>
         <div id="conversation-log"></div>
         <button id="end-space">End Space</button>
     </div>
-    
 
-
-<!-- Inside the <script> tag -->
     <script>
         let isMuted = false;
+
+        // Function to update the conversation log
+        function updateConversationLog(speaker, message) {
+            $('#conversation-log').append(`<p><strong>${speaker}:</strong> ${message}</p>`);
+            $('#conversation-log').scrollTop($('#conversation-log')[0].scrollHeight);
+        }
+
         // Function to start audio recording and handle conversation updates
         async function startConversation() {
-            // Initialize audio recording
             // Show the conversation container
             $('#conversation-container').show();
             // Initialize conversation log
@@ -71,90 +72,84 @@
                     $(this).text('Mute');
                 }
             });
+
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                
-    navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function(stream) {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const input = audioContext.createMediaStreamSource(stream);
-            const analyser = audioContext.createAnalyser();
-            input.connect(analyser);
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(function(stream) {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const input = audioContext.createMediaStreamSource(stream);
+                    const analyser = audioContext.createAnalyser();
+                    input.connect(analyser);
 
-            window.recorder = new Recorder(input);
+                    window.recorder = new Recorder(input);
 
-            // Function to check if user is speaking
-            function isSpeaking() {
-                const array = new Uint8Array(analyser.frequencyBinCount);
-                analyser.getByteFrequencyData(array);
-                let values = 0;
+                    // Function to check if user is speaking
+                    function isSpeaking() {
+                        const array = new Uint8Array(analyser.frequencyBinCount);
+                        analyser.getByteFrequencyData(array);
+                        let values = 0;
 
-                for (let i = 0; i < array.length; i++) {
-                    values += array[i];
-                }
-
-                let average = values / array.length;
-
-                if (average > 10) { // Adjust the threshold as needed
-                    $('#speaking-indicator').show();
-                } else {
-                    $('#speaking-indicator').hide();
-                }
-
-                if (!isMuted) {
-                    requestAnimationFrame(isSpeaking);
-                } else {
-                    $('#speaking-indicator').hide();
-                }
-            }
-
-            isSpeaking();
-
-            recorder.record();
-    
-                // Periodically send audio data to the server
-                setInterval(async function() {
-                    recorder.exportWAV(async function(blob) {
-                        const formData = new FormData();
-                        formData.append('audio_data', blob);
-    
-                        const response = await fetch('/update_conversation', {
-                            method: 'POST',
-                            body: formData
-                        });
-    
-                        const data = await response.json();
-                        if (transcription) {
-                            updateConversationLog('You', transcription);
+                        for (let i = 0; i < array.length; i++) {
+                            values += array[i];
                         }
 
-                        if (data.ai_responses) {
-                            data.ai_responses.forEach(response => {
-                                updateConversationLog(response.name, response.content);
+                        let average = values / array.length;
+
+                        if (average > 10) { // Adjust the threshold as needed
+                            $('#speaking-indicator').show();
+                        } else {
+                            $('#speaking-indicator').hide();
+                        }
+
+                        if (!isMuted) {
+                            requestAnimationFrame(isSpeaking);
+                        } else {
+                            $('#speaking-indicator').hide();
+                        }
+                    }
+
+                    isSpeaking();
+
+                    recorder.record();
+
+                    // Periodically send audio data to the server
+                    setInterval(async function() {
+                        if (!isMuted) {
+                            recorder.exportWAV(async function(blob) {
+                                const formData = new FormData();
+                                formData.append('audio_data', blob);
+
+                                const response = await fetch('/update_conversation', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+
+                                const data = await response.json();
+
+                                if (data.transcription) {
+                                    updateConversationLog('You', data.transcription);
+                                }
+
+                                if (data.ai_responses) {
+                                    data.ai_responses.forEach(response => {
+                                        updateConversationLog(response.name, response.content);
+                                    });
+                                }
+
+                                // Clear recorder for next batch
+                                recorder.clear();
                             });
                         }
-    
-                        // Clear recorder for next batch
-                        recorder.clear();
-                    })
+                    }, 5000); // Adjust the interval as needed (e.g., every 5 seconds)
                 })
-            })
-            .catch(function(err) {
-                console.error('Error accessing microphone: ', err);
-            });
-                    } else {
-                    alert('Audio recording not supported in this browser.');
-                }
+                .catch(function(err) {
+                    console.error('Error accessing microphone: ', err);
+                });
+            } else {
+                alert('Audio recording not supported in this browser.');
+            }
         }
-    </script>
 
-
-    <script>
-    function updateConversationLog(speaker, message) {
-        $('#conversation-log').append(`<p><strong>${speaker}:</strong> ${message}</p>`);
-        $('#conversation-log').scrollTop($('#conversation-log')[0].scrollHeight);
-    }
-
-        
         $(document).ready(function() {
             $('#num_participants').on('change', function() {
                 let num = $(this).val();
@@ -180,7 +175,6 @@
                     success: function(response) {
                         if (response.success) {
                             $('#setup-form').hide();
-                            $('#conversation-container').show();
                             startConversation();
                         }
                     }
