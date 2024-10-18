@@ -1,0 +1,16 @@
+ai_space_call/
+│
+├── app/
+│   ├── __init__.py
+│   ├── routes.py           # Flask routes for UI interactions
+│   ├── llama_manager.py     # Logic to manage LLaMA conversation
+│   ├── whisper_manager.py   # Logic to handle Whisper transcription
+│   ├── conversation_log.py  # Manage conversation history
+│   ├── templates/
+│   │   └── index.html       # Frontend UI template
+│   └── static/
+│       └── style.css        # Optional styling for the UI
+│
+├── config.py                # Configuration file
+├── run.py                   # Entry point to run the Flask app
+└── requirements.txt         # Dependencies (Flask, transformers, etc.)

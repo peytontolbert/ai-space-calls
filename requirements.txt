@@ -1,0 +1,7 @@
+Flask==2.1.0
+torch>=1.13.1
+transformers>=4.24.0
+datasets>=2.3.2
+torchaudio
+sounddevice
+numpy
