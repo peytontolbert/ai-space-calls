@@ -18,12 +18,15 @@ class LlamaManager:
         # Generate a response from LLaMA
         outputs = self.pipe(
             prompt,
-            max_new_tokens=256,
+            max_new_tokens=1000,
         )
         generated_text = outputs[0]['generated_text']
-        print(f"generated_text: {generated_text}")
-        # Parse the generated text to extract the next speaker and their response
-        # Assuming the model outputs in the format "Name: Message"
+        print(f"outputs: {outputs[0]['generated_text']}")
+        # Begin parsing after "Conversation starts here."
+        conversation_start = "Conversation starts here."
+        start_index = generated_text.find(conversation_start)
+        if start_index != -1:
+            generated_text = generated_text[start_index + len(conversation_start):]
         ai_responses = self.parse_ai_response(generated_text, participants)
         return ai_responses
 
@@ -32,10 +35,37 @@ class LlamaManager:
         lines = generated_text.strip().split('\n')
         ai_responses = []
         for line in lines:
+            if line.startswith("You:"):
+                continue  # Skip user lines
             if ':' in line:
                 name, content = line.split(':', 1)
                 name = name.strip()
                 content = content.strip()
-                if any(p['name'] == name for p in participants):
+                # Parse action if present
+                if '(' in content and ')' in content:
+                    message, action_part = content.split('(', 1)
+                    message = message.strip()
+                    action_part = action_part.strip(')')
+                    if action_part.startswith("action:"):
+                        action_details = action_part[len("action:"):].strip()
+                        if action_details.startswith("interrupt"):
+                            parts = action_details.split()
+                            action = "interrupt"
+                            time_wait = parts[1] if len(parts) > 1 else "0s"
+                            ai_responses.append({
+                                'name': name,
+                                'content': message,
+                                'action': action,
+                                'time': time_wait
+                            })
+                        else:
+                            ai_responses.append({
+                                'name': name,
+                                'content': message,
+                                'action': action_details
+                            })
+                    else:
+                        ai_responses.append({'name': name, 'content': content})
+                else:
                     ai_responses.append({'name': name, 'content': content})
         return ai_responses
