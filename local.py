@@ -28,8 +28,8 @@ def prepare_system_prompt(space_name, description, participants):
         "Use the format: Name: Message (action: wait/interrupt [time to wait])\n\n"
         "Example:\n"
         "Alice: Hello, how are you? (action: wait)\n"
-        "Bob: I'm doing well, thank you. Let's discuss AI advancements. (action: interrupt 3s)\n"
-        "Carol: Sounds great! (action: interrupt 4s)\n"
+        "Bob: I'm doing well, thank you. Let's discuss AI advancements. (action: interrupt 11s)\n"
+        "Carol: Sounds great! (action: interrupt 10s)\n"
         "Please continue the conversation by providing each AI participant's next response. "
         "For each response, include the participant's name followed by their message, "
         "and an action indicating whether they wait for others to speak or interrupt. "
@@ -37,7 +37,7 @@ def prepare_system_prompt(space_name, description, participants):
     # Include instructions to make the conversation natural and to decide when to wait or interrupt
     prompt += (
         "The conversation should feel natural, with participants politely waiting or "
-        "interrupting when appropriate. Decide whether to wait or interrupt based on "
+        "interrupting near the end of each response. Decide whether to wait or interrupt based on "
         "the flow of the conversation and any pauses. If the user hasn't spoken in a while, feel free to bring them back to the conversation.\n"
     )
     prompt += "\nConversation starts here.\n"
@@ -56,37 +56,44 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
     # Initialize a thread-safe queue for user inputs
     user_input_queue = queue.Queue()
 
-    # Function to continuously listen to the microphone and enqueue user inputs
-    def listen_to_microphone():
-        nonlocal user_speaking  # {{ Access the user_speaking flag }}
+    # Start listening for audio in WhisperManager
+    whisper_manager.start_listening()
+    
+    # Function to handle transcribed audio
+    def handle_transcription():
         while True:
-            user_input = whisper_manager.record_and_transcribe_audio(duration=5)
-            if user_input != "No speech detected.":
-                user_speaking = True  # {{ Set flag when user starts speaking }}
-                user_input_queue.put(user_input)
-                logging.debug("User input queued.")
-                user_speaking = False  # {{ Reset flag after capturing input }}
+            transcription = whisper_manager.get_transcription()
+            if transcription != "No speech detected.":
+                user_input_queue.put(transcription)
+                logging.debug("User input enqueued from transcription.")
+            else:
+                pass
 
-    # Start the microphone listener thread
-    mic_thread = threading.Thread(target=listen_to_microphone, daemon=True)
-    mic_thread.start()
+    # Start the transcription handler thread
+    transcription_thread = threading.Thread(target=handle_transcription, daemon=True)
+    transcription_thread.start()
 
     # Function to play AI audio
     def play_ai_audio(file_path, action=None, time_wait=0):
-        nonlocal ai_audio_playing, stop_playback, interrupt_countdown, ai_speaking  # {{ Include ai_speaking
-        if action == "interrupt":
-            # Apply countdown before interrupting
-            interrupt_countdown = int(time_wait.rstrip('s'))
-            while interrupt_countdown > 0:
-                print(f"Interrupting in {interrupt_countdown} seconds...")
-                time.sleep(1)
-                interrupt_countdown -= 1
-            if ai_audio_playing:
-                stop_playback = True
+        nonlocal ai_audio_playing, stop_playback, ai_speaking  # {{ Include ai_speaking
+        
         ai_audio_playing = True
         ai_speaking = True  # {{ Set flag when AI starts speaking
         pygame.mixer.music.load(file_path)
         pygame.mixer.music.play()
+        
+        if action == "interrupt":
+            # {{ Start a separate thread to handle interruption after time_wait seconds }}
+            def interrupt_playback():
+                time_to_wait = int(time_wait.rstrip('s'))
+                time.sleep(time_to_wait)
+                if ai_audio_playing:
+                    stop_playback = True
+                    logging.debug(f"Interrupting AI speech after {time_to_wait} seconds.")
+            
+            interrupt_thread = threading.Thread(target=interrupt_playback, daemon=True)
+            interrupt_thread.start()
+        
         while pygame.mixer.music.get_busy():
             if stop_playback:
                 pygame.mixer.music.stop()
@@ -94,7 +101,7 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
                 break
             time.sleep(0.1)
         ai_audio_playing = False
-        ai_speaking = False  # {{ Reset flag when AI stops speaking
+        ai_speaking = False  # {{ Reset flag when AI stops speaking }}
 
     # Loop to maintain continuous conversation
     while True:
@@ -206,9 +213,9 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
                         logging.debug("User input cleared after AI started speaking.")
 
             # ➏ Print the conversation so far
-            print("\nCurrent Conversation:")
-            for message in conversation_log.get_log():
-                print(f"{message['name']}: {message['content']}")
+            #print("\nCurrent Conversation:")
+            #for message in conversation_log.get_log():
+            #    print(f"{message['name']}: {message['content']}")
 
         except Exception as e:
             print(f"An error occurred: {e}")
@@ -216,7 +223,10 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
             time.sleep(1)
 
         # Small delay before next interaction
-        time.sleep(1)
+        time.sleep(0.1)  # {{ Reduced delay for better responsiveness }}
+
+    # Ensure to stop listening when the loop ends
+    whisper_manager.stop_listening()
 
 def setup_speech_manager():
     speech_manager = SpeechManager(OPENAI_API_KEY)
@@ -240,7 +250,7 @@ def main():
     ]
 
     # Initialize LlamaManager
-    llama_manager = LlamaManager()
+    llama_manager = LlamaManager(api_key=OPENAI_API_KEY)
     
     # Setup Whisper Manager
     whisper_manager = setup_whisper_manager()

@@ -13,7 +13,6 @@ shimmer
 
 class SpeechManager:
     def __init__(self, apikey):
-        print(apikey)
         self.client = OpenAI(api_key=apikey)
 
     def text_to_speech(self, text, voice):

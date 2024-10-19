@@ -1,14 +1,16 @@
 from transformers import pipeline
+from openai import OpenAI
 
 class LlamaManager:
-    def __init__(self):
+    def __init__(self, api_key):
+        self.client = OpenAI(api_key=api_key)
         self.model_id = "meta-llama/Llama-3.2-3B-Instruct"
         self.pipe = pipeline(
             "text-generation",
             model=self.model_id,
             torch_dtype="bfloat16",
-            device_map="auto",
-            max_new_tokens=2000
+            device_map="cuda:0",
+            max_new_tokens=800
         )
     def generate_response(self, conversation_history, system_prompt, participants):
         # Prepare user input with the last 20 messages from conversation history
@@ -16,12 +18,23 @@ class LlamaManager:
         prompt = system_prompt + "\n" + user_prompt
         
         # Generate a response from LLaMA
-        outputs = self.pipe(
-            prompt,
-            max_new_tokens=2000,
+        #outputs = self.pipe(
+        #    prompt,
+        #    max_new_tokens=800
+        #)
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            max_tokens=800
         )
-        generated_text = outputs[0]['generated_text']
-        print(f"outputs: {outputs[0]['generated_text']}")
+        
+
+        generated_text = response.choices[0].message.content
+        print(f"generated_text: {generated_text}")
         # Begin parsing after "Conversation starts here."
         conversation_start = "Conversation starts here."
         start_index = generated_text.find(conversation_start)
