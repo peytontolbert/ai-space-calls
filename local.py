@@ -52,6 +52,9 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
     interrupt_countdown = 0
     ai_speaking = False  # {{ Existing flag to track AI speaking state }}
     user_speaking = False  # {{ Added flag to track user speaking state }}
+    
+    # {{ Added flag to indicate if AI is currently processing a response }}
+    ai_busy = False
 
     # Initialize a thread-safe queue for user inputs
     user_input_queue = queue.Queue()
@@ -102,12 +105,15 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
             time.sleep(0.1)
         ai_audio_playing = False
         ai_speaking = False  # {{ Reset flag when AI stops speaking }}
+        # {{ Reset ai_busy flag when AI finishes speaking }}
+        nonlocal ai_busy
+        ai_busy = False
 
     # Loop to maintain continuous conversation
     while True:
         try:
-            # ➊ Check if there's new user input in the queue
-            if not user_input_queue.empty():
+            # {{ Only process new input if AI is not busy }}
+            if not ai_busy and not user_input_queue.empty():
                 user_input = user_input_queue.get()
                 logging.debug(f"Received user input: {user_input}")
 
@@ -120,6 +126,9 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
 
                 # {{ Check if user is not currently speaking }}
                 if not user_speaking:
+                    # {{ Set ai_busy flag to True as we're processing a new AI response }}
+                    ai_busy = True
+
                     # ➌ Add user message to conversation log
                     conversation_log.add_message('You', user_input)
 
@@ -145,6 +154,8 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
                                 audio_file = speech_manager.text_to_speech(response['content'], voice)
                             except openai.BadRequestError as e:
                                 print(f"Speech generation failed: {e}")
+                                # {{ Reset ai_busy flag if speech generation fails }}
+                                ai_busy = False
                                 continue  # Skip this response if speech generation fails
                         else:
                             continue  # Skip if content is empty
@@ -164,53 +175,59 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
                             logging.debug("User input cleared after AI started speaking.")
 
             # {{ If user begins speaking before AI speaks }}
-            if user_speaking and not ai_audio_playing:
-                user_input = user_input_queue.get()
-                logging.debug(f"Received additional user input: {user_input}")
+            if user_speaking and not ai_audio_playing and not ai_busy:
+                if not user_input_queue.empty():
+                    user_input = user_input_queue.get()
+                    logging.debug(f"Received additional user input: {user_input}")
 
-                user_input = re.sub(r'[^\w\s]', '', user_input)
-                logging.debug(f"Filtered additional user input: {user_input}")
+                    user_input = re.sub(r'[^\w\s]', '', user_input)
+                    logging.debug(f"Filtered additional user input: {user_input}")
 
-                # Add to conversation log and send to LLaMA model
-                conversation_log.add_message('You', user_input)
-                ai_responses = llama_manager.generate_response(
-                    conversation_history=conversation_log.get_log(),
-                    system_prompt=system_prompt,
-                    participants=participants
-                )
+                    # {{ Set ai_busy flag to True as we're processing a new AI response }}
+                    ai_busy = True
 
-                # Add AI responses and handle speech
-                for response in ai_responses:
-                    if not response.get('content'):
-                        continue
-                    conversation_log.add_message(response['name'], response['content'])
-                    # Generate speech for AI response
-                    speech_manager = setup_speech_manager()
-                    voice = next((p['voice'] for p in participants if p['name'] == response['name']), 'alloy')
-                    
-                    # Ensure content is not empty before generating speech
-                    if response['content'].strip():
-                        try:
-                            audio_file = speech_manager.text_to_speech(response['content'], voice)
-                        except openai.BadRequestError as e:
-                            print(f"Speech generation failed: {e}")
-                            continue  # Skip this response if speech generation fails
-                    else:
-                        continue  # Skip if content is empty
-                    
-                    # Play the generated audio in a separate thread with action handling
-                    if 'action' in response:
-                        action = response['action']
-                        time_wait = response.get('time', '0s')
-                        playback_thread = threading.Thread(target=play_ai_audio, args=(audio_file, action, time_wait), daemon=True)
-                    else:
-                        playback_thread = threading.Thread(target=play_ai_audio, args=(audio_file,), daemon=True)
-                    playback_thread.start()
-                    
-                    # {{ Clear user input queue after AI starts speaking }}
-                    while not user_input_queue.empty():
-                        user_input_queue.get()
-                        logging.debug("User input cleared after AI started speaking.")
+                    # Add to conversation log and send to LLaMA model
+                    conversation_log.add_message('You', user_input)
+                    ai_responses = llama_manager.generate_response(
+                        conversation_history=conversation_log.get_log(),
+                        system_prompt=system_prompt,
+                        participants=participants
+                    )
+
+                    # Add AI responses and handle speech
+                    for response in ai_responses:
+                        if not response.get('content'):
+                            continue
+                        conversation_log.add_message(response['name'], response['content'])
+                        # Generate speech for AI response
+                        speech_manager = setup_speech_manager()
+                        voice = next((p['voice'] for p in participants if p['name'] == response['name']), 'alloy')
+                        
+                        # Ensure content is not empty before generating speech
+                        if response['content'].strip():
+                            try:
+                                audio_file = speech_manager.text_to_speech(response['content'], voice)
+                            except openai.BadRequestError as e:
+                                print(f"Speech generation failed: {e}")
+                                # {{ Reset ai_busy flag if speech generation fails }}
+                                ai_busy = False
+                                continue  # Skip this response if speech generation fails
+                        else:
+                            continue  # Skip if content is empty
+                        
+                        # Play the generated audio in a separate thread with action handling
+                        if 'action' in response:
+                            action = response['action']
+                            time_wait = response.get('time', '0s')
+                            playback_thread = threading.Thread(target=play_ai_audio, args=(audio_file, action, time_wait), daemon=True)
+                        else:
+                            playback_thread = threading.Thread(target=play_ai_audio, args=(audio_file,), daemon=True)
+                        playback_thread.start()
+                        
+                        # {{ Clear user input queue after AI starts speaking }}
+                        while not user_input_queue.empty():
+                            user_input_queue.get()
+                            logging.debug("User input cleared after AI started speaking.")
 
             # ➏ Print the conversation so far
             #print("\nCurrent Conversation:")
@@ -219,6 +236,7 @@ def simulate_conversation(llama_manager, system_prompt, conversation_log, partic
 
         except Exception as e:
             print(f"An error occurred: {e}")
+            logging.error(f"An error occurred: {e}")
             # Optionally, implement a short delay before continuing
             time.sleep(1)
 
