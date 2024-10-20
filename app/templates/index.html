@@ -36,6 +36,14 @@
         <button id="end-space">End Space</button>
     </div>
 
+    <!-- Add a button for recording audio -->
+    <button id="record-button">Record</button>
+
+    <!-- Add a container to display conversation -->
+    <div id="conversation">
+        <!-- Existing conversation display elements -->
+    </div>
+
     <script>
         let isMuted = false;
 
@@ -185,6 +193,63 @@
                 location.reload();
             });
         });
+
+        // Function to start recording
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            const audioChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
+                const formData = new FormData();
+                formData.append('audio_data', audioBlob, 'user_audio.mp3');
+
+                // Send the audio data to the server
+                fetch('/update_conversation', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.ai_responses){
+                        data.ai_responses.forEach(response => {
+                            // Display text response
+                            const msgDiv = document.createElement('div');
+                            msgDiv.innerHTML = `<strong>${response.name}:</strong> ${response.content}`;
+                            document.getElementById('conversation').appendChild(msgDiv);
+
+                            // Play AI audio response
+                            if(response.audio_url){
+                                const audio = new Audio(response.audio_url);
+                                audio.play();
+                            }
+                        });
+                    }
+                    if(data.success){
+                        console.log("Conversation updated successfully.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Error updating conversation:", error);
+                });
+            };
+
+            mediaRecorder.start();
+
+            // Automatically stop recording after 5 seconds
+            setTimeout(() => {
+                mediaRecorder.stop();
+                stream.getTracks().forEach(track => track.stop());
+            }, 5000);
+        }
+
+        // Add event listener to the record button
+        document.getElementById('record-button').addEventListener('click', startRecording);
     </script>
 </body>
 </html>

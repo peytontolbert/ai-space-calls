@@ -1,5 +1,6 @@
 from pathlib import Path
 from openai import OpenAI
+import time
 
 """
 voices:
@@ -16,7 +17,8 @@ class SpeechManager:
         self.client = OpenAI(api_key=apikey)
 
     def text_to_speech(self, text, voice):
-        speech_file_path = Path(__file__).parent / f"{voice}.mp3"
+        # Save audio files to static/audio/ with a unique timestamp
+        speech_file_path = Path(__file__).parent.parent / 'static' / 'audio' / f"{voice}_{int(time.time())}.mp3"
         response = self.client.audio.speech.create(
             model="tts-1",
             voice=voice,

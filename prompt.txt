@@ -1,0 +1,15 @@
+You are handling a conversation for {space_name}
+
+{description}
+
+{participants}
+
+Your role is to generate 2 more messages to the conversation log using the following format:
+
+[participant_name]: [message]
+[participant_name]: [message]
+
+The conversation log is:
+{conversation_log}
+
+
